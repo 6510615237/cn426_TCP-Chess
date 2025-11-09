@@ -68,7 +68,8 @@ def handle_client(conn, addr):
                 
                 from_pos = data_dict.get("selected_pos")
                 to_pos = data_dict.get("target_pos")
-
+                role = rooms[room]["roles"].get(conn)
+                
                 if not board.is_piece_owned_by(from_pos, role):
                     conn.sendall(json.dumps({
                         "status": "fail",
@@ -76,7 +77,7 @@ def handle_client(conn, addr):
                     }).encode("utf-8"))
                     continue
                 
-                result = board.make_move(from_pos, to_pos)
+                result = board.make_move(from_pos, to_pos, role)
 
                 if result:
                     rooms[room]["turn"] = "black" if role == "white" else "white"
