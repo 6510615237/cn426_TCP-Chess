@@ -51,6 +51,16 @@ class ChessGame:
             print(f"Error: {e}")
 
             return False
+    
+    def is_piece_owned_by(self, square, role):
+        row, col = algebraic_to_index(square)
+        piece = self.board[row][col]
+        if piece == ".":
+            return False
+        if role == "white":
+            return piece.isupper()
+        else:
+            return piece.islower()
 
     def __str__(self):
         return self.print_board(self.board)

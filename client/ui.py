@@ -1,52 +1,74 @@
 import tkinter as tk
 from tkinter import messagebox
-# import client.main as client
-import socket
-import struct
-import json
-import threading
+from client_logic import ChessClient
 
-HOST = '127.0.0.1'  
-PORT = 60000  
+PORT = 60000
+client = None  # Global client instance
+
+def on_server_message(message):
+    print("Server:", message)
+    # You can update UI here later
 
 def connect():
-    try:
-        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        client_socket.connect((HOST, PORT))
+    ip = ip_entry.get()
+    name = name_entry.get()
+    room = room_entry.get()
 
-        data_dict = {
-            "status": "success",
-            "type": "MOVE",
-            "selected_pos": "a2",
-            "target_pos": "e4",
-        }
+    if not ip or not name or not room:
+        messagebox.showerror("Missing Info", "Please fill in all fields.")
+        return
 
-        client_socket.sendall(json.dumps(data_dict).encode("utf-8"))
+    global client
+    client = ChessClient(ip, PORT, name, room, on_receive_callback=on_server_message)
+    success = client.connect()
+    if success:
+        messagebox.showinfo("Connected", f"Connected to {ip} as {name} in room {room}")
+    else:
+        messagebox.showerror("Connection Failed", "Could not connect to server.")
 
-        data = client_socket.recv(1024).decode('utf-8')
-        data_dict = json.loads(data)
+def send_move():
+    if not client:
+        messagebox.showerror("Not Connected", "Please connect first.")
+        return
 
-        print(f"Received: {data_dict}")
+    from_pos = from_entry.get().strip()
+    to_pos = to_entry.get().strip()
 
-        client_socket.close()
-    except Exception as e:
-        root.after(0, lambda: messagebox.showerror("Connection Error", str(e)))
+    if len(from_pos) != 2 or len(to_pos) != 2:
+        messagebox.showerror("Invalid Input", "Please enter valid positions like 'a2' and 'a4'.")
+        return
 
-def connect_thread():
-    threading.Thread(target=connect, daemon=True).start()
+    client.send_move(from_pos, to_pos)
 
 # --- Tkinter UI ---
 root = tk.Tk()
-root.title("Tkinter Socket Client")
-root.geometry("640x480")
+root.title("Chess Client")
+root.geometry("400x400")
 
-label = tk.Label(root, text="Click button to connect", font=("Sarabun", 12))
-label.pack(pady=20)
+tk.Label(root, text="Server IP:").pack()
+ip_entry = tk.Entry(root)
+ip_entry.insert(0, "127.0.0.1")
+ip_entry.pack()
 
-btn1 = tk.Button(root, text="Send & Receive", command=connect_thread, width=20)
-btn1.pack(pady=10)
+tk.Label(root, text="Your Name:").pack()
+name_entry = tk.Entry(root)
+name_entry.pack()
 
-btn2 = tk.Button(root, text="Quit", command=root.destroy, width=20)
-btn2.pack(pady=10)
+tk.Label(root, text="Room Name:").pack()
+room_entry = tk.Entry(root)
+room_entry.pack()
+
+tk.Button(root, text="Connect", command=connect).pack(pady=10)
+
+tk.Label(root, text="From Position (e.g., a2):").pack()
+from_entry = tk.Entry(root)
+from_entry.pack()
+
+tk.Label(root, text="To Position (e.g., a4):").pack()
+to_entry = tk.Entry(root)
+to_entry.pack()
+
+tk.Button(root, text="Send Move", command=send_move).pack(pady=10)
+tk.Button(root, text="Quit", command=root.destroy).pack(pady=10)
 
 root.mainloop()
