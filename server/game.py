@@ -67,7 +67,15 @@ class ChessGame:
             return False
         if role == "black" and not piece.islower():
             return False
-
+        
+        # Prevent capturing own piece
+        dst_piece = self.board[dst_row][dst_col]
+        if dst_piece != ".":
+            if role == "white" and dst_piece.isupper():
+                return False
+            if role == "black" and dst_piece.islower():
+                return False
+            
         # Movement logic
         dr = dst_row - src_row
         dc = dst_col - src_col
