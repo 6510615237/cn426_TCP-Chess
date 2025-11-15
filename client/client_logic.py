@@ -33,12 +33,16 @@ class ChessClient:
             print(f"[ERROR] Connection failed: {e}")
             return False
 
-    def send_move(self, from_pos, to_pos):
+    def send_move(self, from_pos, to_pos, promotion_to=None):
+        """ Sends a move, now with an optional promotion choice. """
         move_msg = {
             "type": "MOVE",
             "selected_pos": from_pos,
             "target_pos": to_pos
         }
+        if promotion_to:
+            move_msg["promotion_to"] = promotion_to
+        
         self.send_json(move_msg)
 
     def send_json(self, data):
