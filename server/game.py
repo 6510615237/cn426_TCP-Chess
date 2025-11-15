@@ -18,6 +18,8 @@ class ChessGame:
             ["P", "P", "P", "P", "P", "P", "P", "P"],
             ["R", "N", "B", "Q", "K", "B", "N", "R"]
         ]
+        self.PIECE_NAMES = {'q': 'Queen', 'r': 'Rook', 'b': 'Bishop', 'n': 'Knight'}
+
 
     def get_board(self):
         return self.board
@@ -27,21 +29,45 @@ class ChessGame:
             print(" ".join(row))
         print()
 
-    def make_move(self, src, dst, role):
+    def make_move(self, src, dst, role, promotion_to=None):
+        """
+        Attempts to make a move.
+        Returns: (bool: success, str: captured_piece, str: promoted_char)
+        """
         if not self.validate_move(src, dst, role):
             print(f"Invalid move for {role}: {src} to {dst}")
-            return False
+            return (False, None, None) # (Success, Captured, Promoted)
     
         src_row, src_col = algebraic_to_index(src)
         dst_row, dst_col = algebraic_to_index(dst)
     
         piece = self.board[src_row][src_col]
+        captured_piece = self.board[dst_row][dst_col] # Get piece at destination
+        
         self.board[dst_row][dst_col] = piece
         self.board[src_row][src_col] = "."
     
         print(f"{role} moved {piece} from {src} to {dst}")
+        
+        # --- Handle Promotion Logic ---
+        promoted_char = None
+        is_pawn = piece.lower() == 'p'
+        is_last_rank = (role == 'white' and dst_row == 0) or (role == 'black' and dst_row == 7)
+        
+        if is_pawn and is_last_rank:
+            if promotion_to and promotion_to.lower() in self.PIECE_NAMES:
+                promoted_char = promotion_to.upper() if role == 'white' else promotion_to.lower()
+                self.board[dst_row][dst_col] = promoted_char
+                print(f"Pawn promoted to {promoted_char}!")
+            else:
+                # This is a server-side fallback, but client should always ask.
+                promoted_char = 'Q' if role == 'white' else 'q'
+                self.board[dst_row][dst_col] = promoted_char
+                print(f"Pawn promoted to {promoted_char} (default)!")
+        # --- END Promotion ---
+
         self.print_board()
-        return True
+        return (True, captured_piece, promoted_char) # Return success, captured, and promoted
     
     
     def is_piece_owned_by(self, square, role):
@@ -55,8 +81,11 @@ class ChessGame:
             return piece.islower()
 
     def validate_move(self, src, dst, role):
-        src_row, src_col = algebraic_to_index(src)
-        dst_row, dst_col = algebraic_to_index(dst)
+        try:
+            src_row, src_col = algebraic_to_index(src)
+            dst_row, dst_col = algebraic_to_index(dst)
+        except Exception:
+            return False
 
         piece = self.board[src_row][src_col]
         if piece == ".":
@@ -88,10 +117,17 @@ class ChessGame:
 
             # Move forward
             if dc == 0:
+                # 1-square move
                 if dr == direction and self.board[dst_row][dst_col] == ".":
                     return True
-                if src_row == start_row and dr == 2 * direction and self.board[dst_row][dst_col] == ".":
+                
+                # --- THIS IS THE FIX ---
+                # 2-square move
+                if src_row == start_row and dr == 2 * direction and \
+                   self.board[dst_row][dst_col] == "." and \
+                   self.board[src_row + direction][dst_col] == ".": # Checks if f3 is clear
                     return True
+                # --- END FIX ---
 
             # Capture
             if abs(dc) == 1 and dr == direction and self.board[dst_row][dst_col] != ".":
@@ -133,4 +169,3 @@ class ChessGame:
 
     def __str__(self):
         return self.print_board(self.board)
-

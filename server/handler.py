@@ -2,7 +2,7 @@ import json
 from game import ChessGame
 
 # Global room tracking
-rooms = {}  # { "RoomName": { "players": [conn1, conn2], "roles": {conn1: "white", conn2: "black"}, "board": ChessGame() } }
+rooms = {}  # { "RoomName": { "players": [conn1, conn2], "roles": {conn1: "white", conn2: "black"}, "names": {conn1: "name1", conn2: "name2"}, "board": ChessGame() } }
 client_rooms = {}  # { conn: "RoomName" }
 
 def handle_client(conn, addr):
@@ -26,6 +26,7 @@ def handle_client(conn, addr):
                     rooms[room] = {
                         "players": [],
                         "roles": {},
+                        "names": {}, # <-- NEW: Add names dictionary
                         "board": ChessGame()
                     }
 
@@ -40,6 +41,7 @@ def handle_client(conn, addr):
                 role = "white" if len(rooms[room]["players"]) == 0 else "black"
                 rooms[room]["players"].append(conn)
                 rooms[room]["roles"][conn] = role
+                rooms[room]["names"][conn] = name # <-- NEW: Store player's name
                 client_rooms[conn] = room
 
                 print(f"[JOIN] {name} joined room '{room}' as {role}")
@@ -52,6 +54,8 @@ def handle_client(conn, addr):
                 
             elif msg_type == "MOVE":
                 room = client_rooms.get(conn)
+                if not room: continue # Safety check
+
                 role = rooms[room]["roles"].get(conn)
                 board = rooms[room]["board"]
 
@@ -66,9 +70,16 @@ def handle_client(conn, addr):
                     }).encode("utf-8"))
                     continue
                 
+                # --- NEW: Get mover and opponent names ---
+                mover_name = rooms[room]["names"].get(conn, "Player")
+                opponent_name = "Opponent"
+                for peer in rooms[room]["players"]:
+                    if peer != conn:
+                        opponent_name = rooms[room]["names"].get(peer, "Opponent")
+                # --- END NEW ---
+                
                 from_pos = data_dict.get("selected_pos")
                 to_pos = data_dict.get("target_pos")
-                role = rooms[room]["roles"].get(conn)
                 
                 if not board.is_piece_owned_by(from_pos, role):
                     conn.sendall(json.dumps({
@@ -77,17 +88,38 @@ def handle_client(conn, addr):
                     }).encode("utf-8"))
                     continue
                 
-                result = board.make_move(from_pos, to_pos, role)
+                # --- MODIFIED: Handle promotion ---
+                promotion_to = data_dict.get("promotion_to")
+                
+                result, captured_piece, promoted_to_char = board.make_move(from_pos, to_pos, role, promotion_to)
+                
+                game_over = False
+                winner = None
+                winner_name = None # <-- NEW
 
                 if result:
                     rooms[room]["turn"] = "black" if role == "white" else "white"
+                    
+                    if captured_piece and captured_piece.lower() == 'k':
+                        game_over = True
+                        winner = role
+                        winner_name = mover_name # <-- NEW: The mover is the winner
+                        print(f"[GAME OVER] {winner_name} wins in room {room}!")
 
                 reply = {
                     "status": "success" if result else "fail",
                     "message": "Move Made." if result else "Invalid Move",
                     "from": from_pos,
-                    "to": to_pos
+                    "to": to_pos,
+                    "captured": captured_piece if result else None,
+                    "game_over": game_over,
+                    "winner": winner, # 'white' or 'black'
+                    "promoted_to": promoted_to_char,
+                    "mover_name": mover_name, # <-- NEW
+                    "opponent_name": opponent_name, # <-- NEW
+                    "winner_name": winner_name # <-- NEW
                 }
+                # --- END MODIFICATION ---
 
                 conn.sendall(json.dumps(reply).encode("utf-8"))
 
@@ -98,7 +130,14 @@ def handle_client(conn, addr):
                             "type": "UPDATE",
                             "from": from_pos,
                             "to": to_pos,
-                            "status": reply["status"]
+                            "status": reply["status"],
+                            "captured": captured_piece if result else None,
+                            "game_over": game_over,
+                            "winner": winner,
+                            "promoted_to": promoted_to_char,
+                            "mover_name": mover_name, # <-- NEW
+                            "opponent_name": opponent_name, # <-- NEW
+                            "winner_name": winner_name # <-- NEW
                         }).encode("utf-8"))
 
             else:
@@ -114,9 +153,11 @@ def handle_client(conn, addr):
         room = client_rooms.get(conn)
         if room and conn in rooms.get(room, {}).get("players", []):
             rooms[room]["players"].remove(conn)
-            del rooms[room]["roles"][conn]
+            if conn in rooms[room]["roles"]:
+                del rooms[room]["roles"][conn]
             print(f"[DISCONNECTED] {addr} left room '{room}'")
             if not rooms[room]["players"]:
+                print(f"[CLEANUP] Deleting empty room '{room}'")
                 del rooms[room]
         if conn in client_rooms:
             del client_rooms[conn]
