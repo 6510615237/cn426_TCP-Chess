@@ -332,6 +332,9 @@ class ChessUI(tk.Tk):
 
             if status == "joined":
                 self.player_role = message.get("role")
+                self.board_state = message.get("board")
+                self.current_turn = message.get("turn")
+                # print(self.current_turn)
                 self.title(f"TCP Chess - Playing as {self.player_role.capitalize()}")
                 self.update_status_label(f"Joined as {self.player_role}. Waiting for opponent...", "blue")
                 self.draw_board()

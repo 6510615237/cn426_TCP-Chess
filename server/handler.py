@@ -27,8 +27,11 @@ def handle_client(conn, addr):
                         "players": [],
                         "roles": {},
                         "names": {}, # <-- NEW: Add names dictionary
-                        "board": ChessGame()
+                        "board": ChessGame(),
+                        "turn": "white"
                     }
+                # else:
+                #     board = rooms[room]["board"]
 
                 if len(rooms[room]["players"]) >= 2:
                     conn.sendall(json.dumps({
@@ -38,17 +41,32 @@ def handle_client(conn, addr):
                     return
 
                 # Assign role
-                role = "white" if len(rooms[room]["players"]) == 0 else "black"
+                # role = "white" if len(rooms[room]["players"]) == 0 else "black"
+
+                ## Role has to take account of who quit, white or black.
+                ## In the old, above case, player who quit is forced into black, even if they were white.
+                current_role = set(rooms[room]["roles"].values())
+                if current_role == {"black"}:
+                    role = "white"
+                elif current_role == {"white"}:
+                    role = "black"
+                else:
+                    role = "white"
+
                 rooms[room]["players"].append(conn)
                 rooms[room]["roles"][conn] = role
                 rooms[room]["names"][conn] = name # <-- NEW: Store player's name
                 client_rooms[conn] = room
+
+                # print(rooms[room]["board"])
 
                 print(f"[JOIN] {name} joined room '{room}' as {role}")
                 conn.sendall(json.dumps({
                     "status": "joined",
                     "room": room,
                     "role": role,
+                    "board": rooms[room]["board"].get_board(),
+                    "turn": rooms[room]["turn"],
                     "message": f"Welcome {name}, you are playing as {role}."
                 }).encode("utf-8"))
                 
