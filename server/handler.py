@@ -5,6 +5,16 @@ from game import ChessGame
 rooms = {}  # { "RoomName": { "players": [conn1, conn2], "roles": {conn1: "white", conn2: "black"}, "board": ChessGame() } }
 client_rooms = {}  # { conn: "RoomName" }
 
+def broadcast_to_room(room, message_dict):
+    """Send JSON message to all players in a room."""
+    if room not in rooms:
+        return
+    for conn in rooms[room]["players"]:
+        try:
+            conn.sendall(json.dumps(message_dict).encode("utf-8"))
+        except:
+            pass
+
 def handle_client(conn, addr):
     print(f"[NEW CONNECTION] {addr}")
     try:
@@ -26,30 +36,52 @@ def handle_client(conn, addr):
                     rooms[room] = {
                         "players": [],
                         "roles": {},
-                        "board": ChessGame()
+                        "board": ChessGame(),
+                        "turn": "white"
                     }
 
+                # Check if room is full
                 if len(rooms[room]["players"]) >= 2:
                     conn.sendall(json.dumps({
-                        "status": "fail",
-                        "message": "Room is full. Only 2 players allowed."
+                        "type": "JOIN_FAIL",
+                        "message": "Room full (2 players max)"
                     }).encode("utf-8"))
-                    return
+                    continue
 
-                # Assign role
+                # Add player to room
                 role = "white" if len(rooms[room]["players"]) == 0 else "black"
                 rooms[room]["players"].append(conn)
                 rooms[room]["roles"][conn] = role
                 client_rooms[conn] = room
 
-                print(f"[JOIN] {name} joined room '{room}' as {role}")
+                print(f"[JOIN] {name} joined '{room}' as {role}")
+
+                # Send join success to this client  
                 conn.sendall(json.dumps({
-                    "status": "joined",
+                    "type": "JOIN_OK",
                     "room": room,
                     "role": role,
-                    "message": f"Welcome {name}, you are playing as {role}."
+                    "players": len(rooms[room]["players"])
                 }).encode("utf-8"))
-                
+
+                # Send lobby update to **ALL** players in room
+                broadcast_to_room(room, {
+                    "type": "LOBBY_UPDATE",
+                    "room": room,
+                    "players": [
+                        rooms[room]["roles"][p] 
+                        for p in rooms[room]["players"]
+                    ],
+                    "total": len(rooms[room]["players"])
+                })
+
+                # Start game when 2 players are ready
+                if len(rooms[room]["players"]) == 2:
+                    broadcast_to_room(room, {
+                        "type": "GAME_START",
+                        "message": "Both players joined. Game starting..."
+                    })
+ 
             elif msg_type == "MOVE":
                 room = client_rooms.get(conn)
                 role = rooms[room]["roles"].get(conn)
