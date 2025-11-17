@@ -7,7 +7,31 @@ client = None  # Global client instance
 
 def on_server_message(message):
     print("Server:", message)
-    # You can update UI here later
+
+    msg_type = message.get("type")
+
+    # Lobby updates
+    if msg_type == "LOBBY_UPDATE":
+        lobby_box.delete(0, tk.END)
+        players = message.get("players", [])
+        lobby_box.insert(tk.END, f"Players in room: {message.get('total')}/2")
+        for p in players:
+            lobby_box.insert(tk.END, f"- {p}")
+
+    # Successful join
+    elif msg_type == "JOIN_OK":
+        role = message.get("role")
+        room = message.get("room")
+        messagebox.showinfo("Joined Room", f"You joined {room} as {role}")
+
+    # Room full or error
+    elif msg_type == "JOIN_FAIL":
+        messagebox.showerror("Join Failed", message.get("message"))
+
+    # Game start trigger
+    elif msg_type == "GAME_START":
+        messagebox.showinfo("Game Start", message.get("message"))
+
 
 def connect():
     ip = ip_entry.get()
@@ -70,5 +94,9 @@ to_entry.pack()
 
 tk.Button(root, text="Send Move", command=send_move).pack(pady=10)
 tk.Button(root, text="Quit", command=root.destroy).pack(pady=10)
+
+tk.Label(root, text="Lobby Status:").pack()
+lobby_box = tk.Listbox(root, height=5)
+lobby_box.pack(fill="both", padx=10, pady=5)
 
 root.mainloop()
