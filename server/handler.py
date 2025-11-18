@@ -55,7 +55,7 @@ def handle_client(conn, addr):
 
                 rooms[room]["players"].append(conn)
                 rooms[room]["roles"][conn] = role
-                rooms[room]["names"][conn] = name # <-- NEW: Store player's name
+                rooms[room]["names"][conn] = name 
                 client_rooms[conn] = room
 
                 # print(rooms[room]["board"])
@@ -72,7 +72,8 @@ def handle_client(conn, addr):
                 
             elif msg_type == "MOVE":
                 room = client_rooms.get(conn)
-                if not room: continue # Safety check
+                if not room: 
+                    continue # Safety check
 
                 role = rooms[room]["roles"].get(conn)
                 board = rooms[room]["board"]
@@ -117,12 +118,20 @@ def handle_client(conn, addr):
 
                 if result:
                     rooms[room]["turn"] = "black" if role == "white" else "white"
-                    
-                    if captured_piece and captured_piece.lower() == 'k':
+
+                    opponent_role = rooms[room]["turn"]
+
+                    # --- Checkmate ---
+                    if board.is_checkmate(opponent_role):
                         game_over = True
                         winner = role
-                        winner_name = mover_name # <-- NEW: The mover is the winner
-                        print(f"[GAME OVER] {winner_name} wins in room {room}!")
+                        winner_name = mover_name
+                        print(f"[GAME OVER] Checkmate! {winner_name} ({winner}) wins in room {room}!")
+                    # if captured_piece and captured_piece.lower() == 'k':
+                    #     game_over = True
+                    #     winner = role
+                    #     winner_name = mover_name # <-- NEW: The mover is the winner
+                    #     print(f"[GAME OVER] {winner_name} wins in room {room}!")
 
                 reply = {
                     "status": "success" if result else "fail",

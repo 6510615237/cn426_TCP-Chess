@@ -2,8 +2,6 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog, font
 # Make sure client_logic.py is in the same folder
 from client_logic import ChessClient 
-import threading
-import json
 
 # --- Configuration ---
 HOST = '127.0.0.1' 
@@ -166,9 +164,15 @@ class ChessUI(tk.Tk):
         self.canvas.delete("all")
         for r in range(BOARD_SIZE):
             for c in range(BOARD_SIZE):
-                x1, y1 = c * SQUARE_SIZE, r * SQUARE_SIZE
-                x2, y2 = x1 + SQUARE_SIZE, y1 + SQUARE_SIZE
-                
+                # x1, y1 = c * SQUARE_SIZE, r * SQUARE_SIZE
+                # x2, y2 = x1 + SQUARE_SIZE, y1 + SQUARE_SIZE
+                dr, dc = self.display_coords(r, c)
+
+                x1 = dc * SQUARE_SIZE
+                y1 = dr * SQUARE_SIZE
+                x2 = x1 + SQUARE_SIZE
+                y2 = y1 + SQUARE_SIZE
+
                 # Determine square color
                 color = LIGHT_COLOR if (r + c) % 2 == 0 else DARK_COLOR
                 
@@ -217,7 +221,7 @@ class ChessUI(tk.Tk):
             self.canvas.create_text(
                 i * SQUARE_SIZE + SQUARE_SIZE // 2,
                 BOARD_DIM - 10,
-                text=chr(ord('a') + i),
+                text=chr(ord('a') + (7 - i)) if self.player_role == "black" else chr(ord('a') + i),
                 font=("Arial", 10, "bold"),
                 fill="#555555"
             )
@@ -225,7 +229,7 @@ class ChessUI(tk.Tk):
             self.canvas.create_text(
                 10,
                 i * SQUARE_SIZE + SQUARE_SIZE // 2,
-                text=str(BOARD_SIZE - i),
+                text=str((i + 1) if self.player_role == "black" else (BOARD_SIZE - i)),
                 font=("Arial", 10, "bold"),
                 fill="#555555"
             )
@@ -241,6 +245,12 @@ class ChessUI(tk.Tk):
 
         c = event.x // SQUARE_SIZE
         r = event.y // SQUARE_SIZE
+
+        # Flip for Black
+        if self.player_role == "black":
+            r = 7 - r
+            c = 7 - c
+
         
         if c < 0 or c >= BOARD_SIZE or r < 0 or r >= BOARD_SIZE:
             return
@@ -549,6 +559,12 @@ class ChessUI(tk.Tk):
             if self.board_state[r][c] != ".": # <-- FIX: Was self.board
                 return False
         return True
+    
+    def display_coords(self, r, c):
+        """Convert board coordinates depending on player side."""
+        if self.player_role == "black":
+            return 7 - r, 7 - c
+        return r, c
 
 
 if __name__ == "__main__":

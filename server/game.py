@@ -79,8 +79,8 @@ class ChessGame:
             return piece.isupper()
         else:
             return piece.islower()
-
-    def validate_move(self, src, dst, role):
+        
+    def validate_move(self, src, dst, role, skip_self_check=False):
         try:
             src_row, src_col = algebraic_to_index(src)
             dst_row, dst_col = algebraic_to_index(dst)
@@ -96,7 +96,7 @@ class ChessGame:
             return False
         if role == "black" and not piece.islower():
             return False
-        
+
         # Prevent capturing own piece
         dst_piece = self.board[dst_row][dst_col]
         if dst_piece != ".":
@@ -104,54 +104,119 @@ class ChessGame:
                 return False
             if role == "black" and dst_piece.islower():
                 return False
-            
-        # Movement logic
+
+        # Movement logic (pseudo-legal)
         dr = dst_row - src_row
         dc = dst_col - src_col
-
         piece_type = piece.lower()
+
+        move_is_legal = False
 
         if piece_type == "p":  # Pawn
             direction = -1 if role == "white" else 1
             start_row = 6 if role == "white" else 1
 
-            # Move forward
-            if dc == 0:
-                # 1-square move
-                if dr == direction and self.board[dst_row][dst_col] == ".":
-                    return True
-                
-                # --- THIS IS THE FIX ---
-                # 2-square move
-                if src_row == start_row and dr == 2 * direction and \
-                   self.board[dst_row][dst_col] == "." and \
-                   self.board[src_row + direction][dst_col] == ".": # Checks if f3 is clear
-                    return True
-                # --- END FIX ---
+            # 1-square forward
+            if dc == 0 and dr == direction and self.board[dst_row][dst_col] == ".":
+                move_is_legal = True
+
+            # 2-square forward
+            if (dc == 0 and src_row == start_row and dr == 2 * direction and
+                self.board[dst_row][dst_col] == "." and
+                self.board[src_row + direction][dst_col] == "."):
+                move_is_legal = True
 
             # Capture
             if abs(dc) == 1 and dr == direction and self.board[dst_row][dst_col] != ".":
-                return True
+                move_is_legal = True
 
         elif piece_type == "r":  # Rook
             if dr == 0 or dc == 0:
-                return self.is_path_clear(src_row, src_col, dst_row, dst_col)
+                if self.is_path_clear(src_row, src_col, dst_row, dst_col):
+                    move_is_legal = True
 
         elif piece_type == "n":  # Knight
-            return (abs(dr), abs(dc)) in [(2, 1), (1, 2)]
+            if (abs(dr), abs(dc)) in [(2, 1), (1, 2)]:
+                move_is_legal = True
 
         elif piece_type == "b":  # Bishop
-            if abs(dr) == abs(dc):
-                return self.is_path_clear(src_row, src_col, dst_row, dst_col)
+            if abs(dr) == abs(dc) and self.is_path_clear(src_row, src_col, dst_row, dst_col):
+                move_is_legal = True
 
         elif piece_type == "q":  # Queen
-            if dr == 0 or dc == 0 or abs(dr) == abs(dc):
-                return self.is_path_clear(src_row, src_col, dst_row, dst_col)
+            if (dr == 0 or dc == 0 or abs(dr) == abs(dc)) and \
+            self.is_path_clear(src_row, src_col, dst_row, dst_col):
+                move_is_legal = True
 
         elif piece_type == "k":  # King
-            return abs(dr) <= 1 and abs(dc) <= 1
+            if abs(dr) <= 1 and abs(dc) <= 1:
+                move_is_legal = True
 
-        return False
+        # If movement was illegal, no need to check king safety
+        if not move_is_legal:
+            return False
+
+        # --- KING SAFETY CHECK ---
+        if not skip_self_check:
+            # Simulate the move
+            saved_src = piece
+            saved_dst = self.board[dst_row][dst_col]
+
+            self.board[dst_row][dst_col] = piece
+            self.board[src_row][src_col] = "."
+
+            in_check = self.is_in_check(role)
+
+            # Undo the move
+            self.board[src_row][src_col] = saved_src
+            self.board[dst_row][dst_col] = saved_dst
+
+            if in_check:
+                return False
+        # --- END KING SAFETY CHECK ---
+
+        return True
+    
+    def is_checkmate(self, role):
+        if not self.is_in_check(role):
+            return False  # must be in check
+
+        # Try every legal move for this side
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if piece == ".":
+                    continue
+
+                if role == "white" and not piece.isupper():
+                    continue
+                if role == "black" and not piece.islower():
+                    continue
+
+                # Try all 64 squares as target
+                for rr in range(8):
+                    for cc in range(8):
+                        src = chr(c + ord('a')) + str(8 - r)
+                        dst = chr(cc + ord('a')) + str(8 - rr)
+
+                        # If the move is valid
+                        if self.validate_move(src, dst, role):
+                            # Simulate move
+                            temp = self.board[rr][cc]
+                            self.board[rr][cc] = piece
+                            self.board[r][c] = "."
+
+                            still_in_check = self.is_in_check(role)
+
+                            # revert
+                            self.board[r][c] = piece
+                            self.board[rr][cc] = temp
+
+                            if not still_in_check:
+                                return False  # There is at least one escape move
+
+        return True  # No escape → checkmate
+
 
     def is_path_clear(self, src_row, src_col, dst_row, dst_col):
         dr = dst_row - src_row
@@ -166,6 +231,41 @@ class ChessGame:
             if self.board[r][c] != ".":
                 return False
         return True
+    
+    def find_king(self, role):
+        king_char = "K" if role == "white" else "k"
+        for r in range(8):
+            for c in range(8):
+                if self.board[r][c] == king_char:
+                    return r, c
+        return None
+    
+    def is_square_attacked(self, row, col, by_role):
+        # Try every piece of by_role, see if it can move to king square
+        for r in range(8):
+            for c in range(8):
+                piece = self.board[r][c]
+                if piece == ".":
+                    continue
+
+                if by_role == "white" and not piece.isupper():
+                    continue
+                if by_role == "black" and not piece.islower():
+                    continue
+
+                src = chr(c + ord('a')) + str(8 - r)
+                dst = chr(col + ord('a')) + str(8 - row)
+
+                if self.validate_move(src, dst, by_role, skip_self_check=True):
+                    return True
+        return False
+    
+    def is_in_check(self, role):
+        king_row, king_col = self.find_king(role)
+        opponent = "white" if role == "black" else "black"
+        return self.is_square_attacked(king_row, king_col, opponent)
+
+
 
     def __str__(self):
         return self.print_board(self.board)

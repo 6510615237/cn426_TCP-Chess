@@ -1,6 +1,7 @@
 import socket
 import json
 import threading
+import ssl
 
 class ChessClient:
     def __init__(self, host, port, name, room, on_receive_callback=None):
@@ -12,12 +13,24 @@ class ChessClient:
         self.listener_thread = None
         self.on_receive_callback = on_receive_callback
 
+
+        # Send JOIN message
+
     def connect(self):
         try:
-            self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+            raw_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE  
+
+            self.sock = context.wrap_socket(raw_sock)
             self.sock.connect((self.host, self.port))
 
-            # Send JOIN message
+            # self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            # self.sock.connect((self.host, self.port))
+
             join_msg = {
                 "type": "JOIN",
                 "name": self.name,

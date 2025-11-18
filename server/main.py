@@ -1,13 +1,16 @@
 import socket
-import struct
 import threading
+import ssl
 
 from handler import handle_client
 
-HOST = '127.0.0.1'
+HOST = '0.0.0.0'
 PORT = 60000
 
 def start_server():
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain(certfile="cert.pem", keyfile="key.pem")
+
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((HOST, PORT))
     server_socket.listen()
@@ -19,9 +22,22 @@ def start_server():
         while True:
             try:
                 conn, addr = server_socket.accept()
-                thread = threading.Thread(target=handle_client, args=(conn, addr))
+                secure_conn = context.wrap_socket(conn, server_side=True)
+
+                thread = threading.Thread(
+                    target=handle_client, 
+                    args=(secure_conn, addr), 
+                    daemon=True
+                )
+
+                # thread = threading.Thread(
+                #     target=handle_client, 
+                #     args=(conn, addr), 
+                #     daemon=True
+                # )
+
+
                 thread.start()
-                # print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
             except socket.timeout:
                 continue 
     except KeyboardInterrupt:
@@ -30,3 +46,4 @@ def start_server():
 
 if __name__ == "__main__":
     start_server()
+
